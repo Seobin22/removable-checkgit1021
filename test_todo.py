@@ -110,6 +110,63 @@ class TodoCliTest(unittest.TestCase):
         self.assertEqual(self.stored_lines(), ["[ ] 하나", "[ ] 셋"])
         self.assertIn("2. [ ] 셋", self.run_cli("list").stdout)
 
+    # --- archive ---
+
+    def archive_lines(self):
+        archive_file = self.data_file.with_name("todos_보관.txt")
+        return archive_file.read_text(encoding="utf-8").splitlines()
+
+    def test_archive_moves_done_items_to_separate_file(self):
+        self.run_cli("add", "남길 일")
+        self.run_cli("add", "끝난 일", "--due", "2026-10-01")
+        self.run_cli("add", "또 남길 일")
+        self.run_cli("add", "또 끝난 일")
+        self.run_cli("done", "2")
+        self.run_cli("done", "4")
+
+        result = self.run_cli("archive")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("2개", result.stdout)
+        self.assertEqual(self.stored_lines(), ["[ ] 남길 일", "[ ] 또 남길 일"])
+        today = date.today().isoformat()
+        self.assertEqual(
+            self.archive_lines(),
+            [
+                f"[x] 끝난 일 | 마감: 2026-10-01 | 보관일: {today}",
+                f"[x] 또 끝난 일 | 보관일: {today}",
+            ],
+        )
+
+    def test_archive_renumbers_remaining_items(self):
+        self.run_cli("add", "끝난 일")
+        self.run_cli("add", "남길 일")
+        self.run_cli("done", "1")
+        self.run_cli("archive")
+        self.assertIn("1. [ ] 남길 일", self.run_cli("list").stdout)
+
+    def test_archive_appends_to_existing_archive(self):
+        self.run_cli("add", "첫 번째")
+        self.run_cli("done", "1")
+        self.run_cli("archive")
+        self.run_cli("add", "두 번째")
+        self.run_cli("done", "1")
+        self.run_cli("archive")
+        archived = self.archive_lines()
+        self.assertEqual(len(archived), 2)
+        self.assertTrue(archived[0].startswith("[x] 첫 번째"))
+        self.assertTrue(archived[1].startswith("[x] 두 번째"))
+
+    def test_archive_with_nothing_done(self):
+        self.run_cli("add", "아직 안 한 일")
+        result = self.run_cli("archive")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("보관할 완료 항목이 없습니다", result.stdout)
+        self.assertEqual(self.stored_lines(), ["[ ] 아직 안 한 일"])
+        self.assertFalse(self.data_file.with_name("todos_보관.txt").exists())
+
+    def test_usage_mentions_archive(self):
+        self.assertIn("archive", self.run_cli().stderr)
+
     # --- 오류 처리 ---
 
     def assert_friendly_error(self, result, *fragments):

@@ -5,11 +5,13 @@
   py todo.py list
   py todo.py done <번호>
   py todo.py delete <번호>
+  py todo.py archive
 
 데이터는 한 줄에 하나씩 UTF-8로 저장한다. 예:
   [ ] 우유 사기 | 마감: 2026-10-25
   [x] 보고서 제출
 저장 파일은 기본값이 이 스크립트 옆의 빈파일.txt이고, 환경변수 TODO_FILE로 바꿀 수 있다.
+archive는 완료 항목을 같은 폴더의 '<저장 파일 이름>_보관.txt'에 보관일과 함께 덧붙인다.
 """
 import os
 import sys
@@ -23,7 +25,8 @@ USAGE = """사용법:
   py todo.py add "내용" [--due YYYY-MM-DD]   할 일 추가
   py todo.py list                           목록 보기
   py todo.py done <번호>                     완료 표시
-  py todo.py delete <번호>                   삭제"""
+  py todo.py delete <번호>                   삭제
+  py todo.py archive                        완료 항목을 보관 파일로 옮기기"""
 
 
 class TodoError(Exception):
@@ -58,6 +61,11 @@ class Todo:
 
 def data_path():
     return Path(os.environ.get("TODO_FILE") or DEFAULT_FILE)
+
+
+def archive_path():
+    path = data_path()
+    return path.with_name(f"{path.stem}_보관{path.suffix}")
 
 
 def load():
@@ -159,6 +167,23 @@ def cmd_delete(args):
     print(f"삭제됨: {index + 1}. {todo.text}")
 
 
+def cmd_archive(args):
+    todos = load()
+    finished = [todo for todo in todos if todo.done]
+    if not finished:
+        print("보관할 완료 항목이 없습니다.")
+        return
+    today = date.today().isoformat()
+    # 보관 파일에 먼저 쓴다. 중간에 실패해도 항목이 사라지지 않고 중복될 뿐이다.
+    with archive_path().open("a", encoding="utf-8") as archive:
+        for todo in finished:
+            archive.write(f"{todo.to_line()} | 보관일: {today}\n")
+    save([todo for todo in todos if not todo.done])
+    print(f"완료 항목 {len(finished)}개를 {archive_path().name}에 보관했습니다.")
+    for todo in finished:
+        print(f"  - {todo.text}")
+
+
 def require_number(args):
     if not args:
         raise TodoError("번호를 입력하세요. 번호는 'py todo.py list'로 확인할 수 있습니다.")
@@ -171,7 +196,13 @@ def format_todo(todo):
     return todo.text
 
 
-COMMANDS = {"add": cmd_add, "list": cmd_list, "done": cmd_done, "delete": cmd_delete}
+COMMANDS = {
+    "add": cmd_add,
+    "list": cmd_list,
+    "done": cmd_done,
+    "delete": cmd_delete,
+    "archive": cmd_archive,
+}
 
 
 def output_encoding(console_cp):
