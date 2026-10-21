@@ -144,6 +144,18 @@ class TodoCliTest(unittest.TestCase):
     def test_unknown_command(self):
         self.assert_friendly_error(self.run_cli("fly"), "fly")
 
+    def test_hand_edited_file_with_bad_date(self):
+        # 사람이 메모장으로 파일을 고치다 날짜를 망가뜨린 경우
+        self.data_file.write_text(
+            "[ ] 정상 항목\n[ ] 고장난 항목 | 마감: 2026-02-30\n", encoding="utf-8"
+        )
+        self.assert_friendly_error(self.run_cli("list"), "2번째 줄")
+
+    def test_file_saved_with_bom_by_notepad(self):
+        self.data_file.write_text("[ ] 메모장에서 쓴 항목\n", encoding="utf-8-sig")
+        result = self.run_cli("list")
+        self.assertIn("1. [ ] 메모장에서 쓴 항목", result.stdout)
+
     def test_no_command_shows_usage(self):
         result = self.run_cli()
         self.assertEqual(result.returncode, 1)
