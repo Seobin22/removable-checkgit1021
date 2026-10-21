@@ -135,7 +135,7 @@ def cmd_list(args):
     for number, todo in enumerate(todos, 1):
         line = f"{number}. [{'x' if todo.done else ' '}] {format_todo(todo)}"
         if todo.is_overdue(today):
-            line += "  ⚠ 기한 지남"
+            line += "  ※ 기한 지남"
         print(line)
 
 
@@ -174,10 +174,25 @@ def format_todo(todo):
 COMMANDS = {"add": cmd_add, "list": cmd_list, "done": cmd_done, "delete": cmd_delete}
 
 
+def output_encoding(console_cp):
+    """파이프 출력에 쓸 인코딩. 받는 쪽(PowerShell 등)은 콘솔 코드페이지로 해석한다."""
+    return f"cp{console_cp}" if console_cp else "utf-8"
+
+
+def console_code_page():
+    try:
+        import ctypes
+        return ctypes.windll.kernel32.GetConsoleOutputCP()
+    except (AttributeError, OSError):
+        return 0  # Windows가 아니거나 연결된 콘솔이 없음
+
+
 def main(argv):
-    # Windows 콘솔/파이프의 기본 인코딩(cp949)과 상관없이 한글을 UTF-8로 출력한다.
+    # 화면에 바로 출력할 때는 Python이 유니코드 콘솔 API를 써서 한글이 깨지지 않는다.
+    # 파이프(변수 저장, | 연결)일 때만 부모 콘솔의 코드페이지(cp949, UTF-8 등)에 맞춘다.
     for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8")
+        if not stream.isatty():
+            stream.reconfigure(encoding=output_encoding(console_code_page()), errors="replace")
 
     if not argv:
         print(USAGE, file=sys.stderr)

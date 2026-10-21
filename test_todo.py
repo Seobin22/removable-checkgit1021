@@ -8,10 +8,17 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import date, timedelta
+from io import StringIO
 from pathlib import Path
+from unittest import mock
+
+import todo
 
 TODO_PY = Path(__file__).with_name("todo.py")
+# todo.py는 파이프 출력을 콘솔 코드페이지에 맞추므로, 받는 쪽도 같은 인코딩으로 읽는다.
+PIPE_ENCODING = todo.output_encoding(todo.console_code_page())
 
 
 class TodoCliTest(unittest.TestCase):
@@ -31,7 +38,7 @@ class TodoCliTest(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(TODO_PY), *args],
             capture_output=True,
-            encoding="utf-8",
+            encoding=PIPE_ENCODING,
             env=env,
         )
 
@@ -160,6 +167,27 @@ class TodoCliTest(unittest.TestCase):
         result = self.run_cli()
         self.assertEqual(result.returncode, 1)
         self.assertIn("사용법", result.stderr)
+
+
+class OutputEncodingTest(unittest.TestCase):
+    """한국어 Windows 기본 PowerShell(cp949)로 출력을 받아도 깨지지 않는지 확인."""
+
+    def test_pipe_encoding_follows_console_code_page(self):
+        self.assertEqual(todo.output_encoding(949), "cp949")
+        self.assertEqual(todo.output_encoding(65001), "cp65001")
+        self.assertEqual(todo.output_encoding(0), "utf-8")
+
+    def test_list_output_is_representable_in_cp949(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_file = Path(tmp) / "todos.txt"
+            data_file.write_text("[ ] 장보기: 우유, 계란 | 마감: 2000-01-01\n", encoding="utf-8")
+            buffer = StringIO()
+            with mock.patch.dict(os.environ, {"TODO_FILE": str(data_file)}), redirect_stdout(buffer):
+                todo.cmd_list([])
+        output = buffer.getvalue()
+        self.assertIn("기한 지남", output)
+        # cp949에 없는 문자(예: ⚠)가 있으면 여기서 UnicodeEncodeError가 난다.
+        output.encode("cp949")
 
 
 if __name__ == "__main__":
