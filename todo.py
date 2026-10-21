@@ -21,12 +21,13 @@ from pathlib import Path
 
 DEFAULT_FILE = Path(__file__).with_name("빈파일.txt")
 DUE_SEPARATOR = " | 마감: "
+# 명령 창에서 한글은 영문 두 칸 폭이라, 그 기준으로 설명 열을 맞췄다.
 USAGE = """사용법:
   py todo.py add "내용" [--due YYYY-MM-DD]   할 일 추가
-  py todo.py list                           목록 보기
+  py todo.py list                            목록 보기
   py todo.py done <번호>                     완료 표시
   py todo.py delete <번호>                   삭제
-  py todo.py archive                        완료 항목을 보관 파일로 옮기기"""
+  py todo.py archive                         완료 항목을 보관 파일로 옮기기"""
 
 
 class TodoError(Exception):
